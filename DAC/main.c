@@ -15,7 +15,7 @@
 
 void sawtooth(void){
 	
-	GPIO_PORTB_DATA_R ^=0x01;// (GPIO_PORTB_DATA_R == 255)? 0: GPIO_PORTB_DATA_R + 1;
+	GPIO_PORTB_DATA_R =(GPIO_PORTB_DATA_R == 255)? 0: GPIO_PORTB_DATA_R + 1;
 	
 }
 
@@ -115,7 +115,7 @@ int main(void){
 	//Button_Init();
 	//LED_Init();
 	Timer1_Init(8000000);
-	
+	PortB_Init();
 	
 	while(1);
 }
