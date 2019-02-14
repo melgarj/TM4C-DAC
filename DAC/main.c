@@ -13,11 +13,43 @@
 // white    RGB    0x0E
 // pink     R-B    0x06
 
+int square_check = 0, UPHDL = 0, triangle_check = 0;
+
 void sawtooth(void){
 	
 	GPIO_PORTB_DATA_R =(GPIO_PORTB_DATA_R == 255)? 0: GPIO_PORTB_DATA_R + 1;
+	//GPIO_PORTB_DATA_R |= 0xFF;
+}
+
+void squarewave(void){
+	square_check += 1;
+	square_check = (square_check > 255)? 0: square_check;
+	
+	GPIO_PORTB_DATA_R =(square_check < 128)? 0x00: 0xFF;
+	//GPIO_PORTB_DATA_R |= 0xFF;
+	
+
 	
 }
+
+
+
+void trianglewave(void){
+	/*
+	
+	UPHDL = ((GPIO_PORTB_DATA_R == 0) || (GPIO_PORTB_DATA_R == 256))?  UPHDL^1: UPHDL;
+	GPIO_PORTB_DATA_R =(UPHDL)? GPIO_PORTB_DATA_R + 2: GPIO_PORTB_DATA_R - 2;
+
+	*/
+	triangle_check += 1;
+	triangle_check = (triangle_check == 512)? 0: triangle_check;
+	UPHDL = (triangle_check <= 255)? 1: 0;
+	GPIO_PORTB_DATA_R =(UPHDL)? GPIO_PORTB_DATA_R + 1: GPIO_PORTB_DATA_R - 1;//0
+	//GPIO_PORTB_DATA_R |= 0xFF;(GPIO_PORTB_DATA_R == 0)? GPIO_PORTB_DATA_R
+
+	}
+
+
 
 void PortB_Init(void){volatile unsigned long delay;
 
@@ -106,15 +138,16 @@ void Timer1_Init(unsigned long period){
 
 void Timer1A_Handler(void){
   TIMER1_ICR_R = TIMER_ICR_TATOCINT;// acknowledge TIMER1A timeout
-	sawtooth();
-	
+	squarewave();
+	//sawtooth();
+	//trianglewave();
 	}
 
 
 int main(void){
 	//Button_Init();
 	//LED_Init();
-	Timer1_Init(8000000);
+	Timer1_Init(131);///16000000/480/256
 	PortB_Init();
 	
 	while(1);
