@@ -48,10 +48,17 @@ void SysTick_Wait10ms(unsigned long delay){
     SysTick_Wait(160000);  // wait 10ms (assumes 16 MHz clock)
   }
 }
-
-float sine_out[256] = {
+//from index 0 to index 255 the voltage output is defined as (1.65*sin((2pi/255)*x)+ 1.65) which ranges from 0 to 3.3v
+//following the voltage from 0 to 255 would create a sine wave centered at 1.65V with an amplitude of 1.65V
+//We want the output to be sent out in binary to our DAC so we have to translate the voltage from Voltage to a binary number
+//Since the voltage from 0 to 3.3v corresponds to 0 to 255 we can take the proportion of out current voltage to the maximum
+//and the muliply it by 255 to get out corresponging decimal number. 
+//For example at index 255 the sin wave contents becomes 2pi, so the left side of the equation becomes 0 leaving 1.65
+//1.65/3.3 is 1/2 or .5 there for we want to output our maximum binary value devided by 2
+//255/2 is roughly 128 which will be represented on our DAC circuit as 1.65 volts. 
+float sine_out[256] = {//sine_out[x] = NUMBER;   NUMBER = ((1.65*sin((2pi/255)*x)+ 1.65)/3.3v)*255
 127.5
-,130.6412748
+,130.6412748 
 ,133.7806425
 ,136.9161973
 ,140.0460355
@@ -309,16 +316,12 @@ float sine_out[256] = {
 };
 
 int twinkle[42] = {262,262,392,392,440,440,392,349,349,330,330,294,294,262,392,392,349,349,330,330,294,392,392,349,349,330,330,294,262,262,392,392,440,440,392,349,349,330,330,294,294,262};
-//int twinkle[7] = {127,127,179,179,159,159,179};
-	
-	
-	
-	
+		
 char d0 = 0, d1 = 0, d2 = 0, d3 = 0, d4 = 0, d5 = 0, d6 = 0;
 int sine_check = 0;
-int i = 0;//to iterate through waves
-unsigned int y = 0;
-int twink = 0;//flag
+int i = 0;//to iterate through waves is timer isr
+unsigned int y = 0;//to itterate through twinkle in mainloop
+int twink = 0;//flag to activate twinkle little star song
 
 void sine_wave(void){
 	
@@ -364,52 +367,10 @@ void PortE_Init(void){volatile unsigned long delay;
 	GPIO_PORTE_DEN_R |= 0x1E;//All pins are digitaly enabled
 	//initializing port D
 	GPIO_PORTE_DATA_R &= ~0x1E;//Clears PE1 on Port E
-	
-	
-	GPIO_PORTE_IS_R &= ~0x1E;//PE1 edge triggerd
-	GPIO_PORTE_IBE_R &= 0x1E;//Not triggered on both edges
-	GPIO_PORTE_IEV_R &= ~0x1E;//faling edge triggered
-	GPIO_PORTE_ICR_R = 0x1E;//clear flags
-	GPIO_PORTE_IM_R = 0x1E;//arm interrupt
-	
-	
-	
-	
 }	
 	
 	
 
-void GPIOPortE_Handler(void){
-	
-
-	
-	
-	if(GPIO_PORTE_RIS_R&0x02){
-		GPIO_PORTE_ICR_R = 0x02;
-		//////////////////////////
-		GPIO_PORTF_DATA_R = 0x08;
-		d3 = ~d3;
-	}
-	if(GPIO_PORTE_RIS_R&0x04){
-		GPIO_PORTE_ICR_R = 0x04;
-		//////////////////////////
-		GPIO_PORTF_DATA_R = 0x0A;
-		d4 = ~d4;
-	}
-	if(GPIO_PORTE_RIS_R&0x08){
-		GPIO_PORTE_ICR_R = 0x08;
-		//////////////////////////
-		GPIO_PORTF_DATA_R = 0x0C;
-		d5 = ~d5;
-	}
-	if(GPIO_PORTE_RIS_R&0x10){
-		GPIO_PORTE_ICR_R = 0x10;
-		//////////////////////////
-		GPIO_PORTF_DATA_R = 0x0E;
-		d6 = ~d6;
-	}
-
-}
 
 
 void PortB_Init(void){volatile unsigned long delay;
@@ -441,46 +402,8 @@ void PortD_Init(void){volatile unsigned long delay;
 	GPIO_PORTD_DEN_R |= 0xCC;//All pins are digitaly enabled
 	//initializing port D
 	GPIO_PORTD_DATA_R &= ~0xCC;//Clears all bit on Port D
-	
-	
-	GPIO_PORTD_IS_R &= ~0xCC;//PD0 - PD6 edge triggerd
-	GPIO_PORTD_IBE_R &= 0xCC;//Not triggered on both edges
-	GPIO_PORTD_IEV_R &= ~0xCC;//faling edge triggered
-	GPIO_PORTD_ICR_R = 0xCC;//clear flags
-	GPIO_PORTD_IM_R = 0xCC;//arm interrupt
-	
-	
-	
-	
 }
 
-
-void GPIOPortD_Handler(void){
-	
-
-	if(GPIO_PORTD_RIS_R&0x04){	
-		GPIO_PORTD_ICR_R = 0x04;
-		////////////////
-		GPIO_PORTF_DATA_R = 0x02;
-		d0 = ~d0;
-	}
-	
-	if(GPIO_PORTD_RIS_R&0x08){
-		GPIO_PORTD_ICR_R = 0x08;
-		d1 = ~d1;//////////////////////////
-		GPIO_PORTF_DATA_R = 0x04;
-	}
-if(GPIO_PORTD_RIS_R&0x40){
-		GPIO_PORTD_ICR_R = 0x40;
-		////////////////
-		GPIO_PORTF_DATA_R = 0x06;
-		d2 = ~d2;
-	}
-	
-	
-
-
-}
 
 
 void Button_Init(void){volatile unsigned long delay;//delay
@@ -570,23 +493,6 @@ void Timer1A_Handler(void){
 	
 	}
 
-	/*
-void twinkle_little_star(void){
-		unsigned int y = 0;
-		//for(y = 0; y < 42; y = y + 1){
-		TIMER1_CTL_R =  0x00000000;
-		while(y < 42){
-			GPIO_PORTF_DATA_R ^= 0xC;
-			Timer1A_TailerLoad(twinkle[y]);
-			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A			
-			SysTick_Wait10ms(25);//quarter second
-			TIMER1_CTL_R =  0x00000000;			
-			
-		}
-		TIMER1_CTL_R =  0x00000000;			
-		
-	}
-*/
 	
 	void GPIOPortF_Handler(void){
 		
@@ -601,7 +507,6 @@ void twinkle_little_star(void){
 	if(GPIO_PORTF_RIS_R&0x10){//if PF4		SW1
 		GPIO_PORTF_ICR_R = 0x10;
 		//////////////////////////
-		//twinkle_little_star();
 		twink = 1;
 	}
 
@@ -615,30 +520,9 @@ int main(void){ unsigned long frequency = 142;
 	PortB_Init();
 	PortD_Init();
 	PortE_Init();
-	Timer1_Init(frequency);///16000000/440/256          440 hz default
+	Timer1_Init(frequency);///16000000/440/256          440 hz default but doesnt play automaticaly because timer1 is intially disabled
 	while(1){
 		
-		/*
-		current_div = (d0)? 262: (d1)? 294: (d2)? 330: (d3)? 349: (d4)? 392: (d5)? 440: (d6)? 494: 440;
-		frequency = (16000000/current_div)/256;
-		Timer1A_TailerLoad(frequency);
-		TIMER1_CTL_R = (d0 || d1 || d2 || d3 || d4 || d5 || d6)? 0x00000001: 0x00000000;
-		*/
-		
-		/*
-		//GPIO_PORTF_DATA_R = (	GPIO_PORTD_DATA_R&0x04)? 0x06: 0x08;
-		switch(GPIO_PORTD_DATA_R&0xCC){
-			case 0x04 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x02;
-			case 0x08 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x04;
-			case 0x40 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x06;
-			case 0x80 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x08;
-		}
-		
-		switch(GPIO_PORTE_DATA_R&0x0E){
-			//case 0x02 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x0A;
-			//case 0x04 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x0C;
-			//case 0x08 : GPIO_PORTF_DATA_R = (GPIO_PORTF_DATA_R&0x00)|0x0E;
-		}*/
 		
 		GPIO_PORTF_DATA_R = (GPIO_PORTD_DATA_R&0x04)? 0x02: 
 												(GPIO_PORTD_DATA_R&0x08)? 0x04: 
@@ -647,22 +531,11 @@ int main(void){ unsigned long frequency = 142;
 												(GPIO_PORTE_DATA_R&0x04)? 0x0A: 
 												(GPIO_PORTE_DATA_R&0x08)? 0x0C: 
 												(GPIO_PORTE_DATA_R&0x10)? 0x0E: 
-											  0x00;//((GPIO_PORTD_DATA_R&GPIO_PORTE_DATA_R) == 0x00)?(GPIO_PORTF_DATA_R&0x00)
-
-/* frequency = 			(GPIO_PORTD_DATA_R&0x04)? 240: //262
-												(GPIO_PORTD_DATA_R&0x08)? 213: //294
-												(GPIO_PORTD_DATA_R&0x40)? 189: //330
-												(GPIO_PORTE_DATA_R&0x02)? 179: //349
-												(GPIO_PORTE_DATA_R&0x04)? 159: //392
-												(GPIO_PORTE_DATA_R&0x08)? 142: //440
-												(GPIO_PORTE_DATA_R&0x10)? 127: //494
-											  142;//440
-		*/
-		
+											  0x00;
 		
 		TIMER1_CTL_R =  (GPIO_PORTD_DATA_R||GPIO_PORTE_DATA_R)?   0x00000001:  0x00000000; 
 												
-		if(((GPIO_PORTD_DATA_R&0x04) == 0x04)&&(d0 == 0x00)){
+		if(((GPIO_PORTD_DATA_R&0x04) == 0x04)&&(d0 == 0x00)){//C
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(240);
 			TIMER1_CTL_R =  0x00000001;
@@ -672,7 +545,7 @@ int main(void){ unsigned long frequency = 142;
 			d0 = (GPIO_PORTD_DATA_R&0x04)? 0xFF: 0x00;
 		}
 		
-		if(((GPIO_PORTD_DATA_R&0x08) == 0x08)&&(d1 == 0x00)){
+		if(((GPIO_PORTD_DATA_R&0x08) == 0x08)&&(d1 == 0x00)){//D
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(213);
 			TIMER1_CTL_R =  0x00000001;
@@ -682,7 +555,7 @@ int main(void){ unsigned long frequency = 142;
 			d1 = (GPIO_PORTD_DATA_R&0x08)? 0xFF: 0x00;
 		}
 		
-		if(((GPIO_PORTD_DATA_R&0x40) == 0x40)&&(d2 == 0x00)){
+		if(((GPIO_PORTD_DATA_R&0x40) == 0x40)&&(d2 == 0x00)){//E
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(190);
 			TIMER1_CTL_R =  0x00000001;
@@ -692,7 +565,7 @@ int main(void){ unsigned long frequency = 142;
 			d2 = (GPIO_PORTD_DATA_R&0x40)? 0xFF: 0x00;
 		}
 		
-		if(((GPIO_PORTE_DATA_R&0x02) == 0x02)&&(d3 == 0x00)){
+		if(((GPIO_PORTE_DATA_R&0x02) == 0x02)&&(d3 == 0x00)){//F
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(180);
 			TIMER1_CTL_R =  0x00000001;
@@ -702,7 +575,7 @@ int main(void){ unsigned long frequency = 142;
 			d3 = (GPIO_PORTE_DATA_R&0x02)? 0xFF: 0x00;
 		}
 		
-		if(((GPIO_PORTE_DATA_R&0x04) == 0x04)&&(d4 == 0x00)){
+		if(((GPIO_PORTE_DATA_R&0x04) == 0x04)&&(d4 == 0x00)){//G
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(160);
 			TIMER1_CTL_R =  0x00000001;
@@ -712,7 +585,7 @@ int main(void){ unsigned long frequency = 142;
 			d4 = (GPIO_PORTE_DATA_R&0x04)? 0xFF: 0x00;
 		}
 		
-		if(((GPIO_PORTE_DATA_R&0x08) == 0x08)&&(d5 == 0x00)){
+		if(((GPIO_PORTE_DATA_R&0x08) == 0x08)&&(d5 == 0x00)){//A
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(143);
 			TIMER1_CTL_R =  0x00000001;
@@ -722,7 +595,7 @@ int main(void){ unsigned long frequency = 142;
 			d5 = (GPIO_PORTE_DATA_R&0x08)? 0xFF: 0x00;
 		}
 
-		if(((GPIO_PORTE_DATA_R&0x10) == 0x10)&&(d6 == 0x00)){
+		if(((GPIO_PORTE_DATA_R&0x10) == 0x10)&&(d6 == 0x00)){//B
 			TIMER1_CTL_R =  0x00000000;
 			Timer1A_TailerLoad(127);
 			TIMER1_CTL_R =  0x00000001;
@@ -733,13 +606,13 @@ int main(void){ unsigned long frequency = 142;
 		}
 		
 		
-		if(twink == 1){
+		if(twink == 1){//extra twinkle little star funciton
 			y = 0;
 			while(y < 42){
-			GPIO_PORTF_DATA_R ^= 0xC;
-			TIMER1_CTL_R =  0x00000000;			
-			Timer1A_TailerLoad(62500/twinkle[y]);
-			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A			
+			GPIO_PORTF_DATA_R ^= 0xC;//testing delays
+			TIMER1_CTL_R =  0x00000000;		//disable timer1a	
+			Timer1A_TailerLoad(62500/twinkle[y]);//set timer period
+			TIMER1_CTL_R = 0x00000001;    // enable TIMER1A			
 			SysTick_Wait10ms(10);//quarter second
 			if(((y%7)==0)&&(y!=0)){
 			SysTick_Wait10ms(25);//quarter second
