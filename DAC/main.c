@@ -13,6 +13,42 @@
 // white    RGB    0x0E
 // pink     R-B    0x06
 
+#define NVIC_ST_CTRL_R          (*((volatile unsigned long *)0xE000E010))
+#define NVIC_ST_RELOAD_R        (*((volatile unsigned long *)0xE000E014))
+#define NVIC_ST_CURRENT_R       (*((volatile unsigned long *)0xE000E018))
+#define NVIC_ST_CTRL_COUNT      0x00010000  // Count flag
+#define NVIC_ST_CTRL_CLK_SRC    0x00000004  // Clock Source
+#define NVIC_ST_CTRL_INTEN      0x00000002  // Interrupt enable
+#define NVIC_ST_CTRL_ENABLE     0x00000001  // Counter mode
+#define NVIC_ST_RELOAD_M        0x00FFFFFF  // Counter load value
+
+// Initialize SysTick with busy wait running at bus clock.
+void SysTick_Init(void){
+  NVIC_ST_CTRL_R = 0;                   // disable SysTick during setup
+  NVIC_ST_RELOAD_R = NVIC_ST_RELOAD_M;  // maximum reload value
+  NVIC_ST_CURRENT_R = 0;                // any write to current clears it
+                                        // enable SysTick with core clock
+  NVIC_ST_CTRL_R = NVIC_ST_CTRL_ENABLE+NVIC_ST_CTRL_CLK_SRC;
+}
+// Time delay using busy wait.
+// The delay parameter is in units of the core clock. (units of 20 nsec for 50 MHz clock)
+void SysTick_Wait(unsigned long delay){
+  volatile unsigned long elapsedTime;
+  unsigned long startTime = NVIC_ST_CURRENT_R;
+  do{
+    elapsedTime = (startTime-NVIC_ST_CURRENT_R)&0x00FFFFFF;
+  }
+  while(elapsedTime <= delay);
+}
+// Time delay using busy wait.
+// This assumes 50 MHz system clock.
+void SysTick_Wait10ms(unsigned long delay){
+  unsigned long i;
+  for(i=0; i<delay; i++){
+    SysTick_Wait(160000);  // wait 10ms (assumes 16 MHz clock)
+  }
+}
+
 float sine_out[256] = {
 127.5
 ,130.6412748
@@ -272,12 +308,17 @@ float sine_out[256] = {
 ,127.5
 };
 
-
-
+int twinkle[42] = {262,262,392,392,440,440,392,349,349,330,330,294,294,262,392,392,349,349,330,330,294,392,392,349,349,330,330,294,262,262,392,392,440,440,392,349,349,330,330,294,294,262};
+//int twinkle[7] = {127,127,179,179,159,159,179};
+	
+	
+	
+	
 char d0 = 0, d1 = 0, d2 = 0, d3 = 0, d4 = 0, d5 = 0, d6 = 0;
 int sine_check = 0;
 int i = 0;//to iterate through waves
-
+unsigned int y = 0;
+int twink = 0;//flag
 
 void sine_wave(void){
 	
@@ -480,22 +521,7 @@ void LED_Init(void){volatile unsigned long delay;
 	
 }
 
-void GPIOPortF_Handler(void){
-		
 
-	if(GPIO_PORTF_RIS_R&0x01){//if PF0    SW2	
-		GPIO_PORTF_ICR_R = 0x01;
-		////////////////
-		i+= 1;
-		i%=4;
-	}
-	
-	if(GPIO_PORTF_RIS_R&0x10){//if PF4		SW1
-		GPIO_PORTF_ICR_R = 0x10;
-		//////////////////////////
-	}
-
-}
 void Timer1_Init(unsigned long period){
   SYSCTL_RCGCTIMER_R |= 0x02;   // 0) activate TIMER1
   TIMER1_CTL_R = 0x00000000;    // 1) disable TIMER1A during setup
@@ -524,7 +550,7 @@ void Timer1A_Handler(void){
 	//sawtooth();
 	//trianglewave();
 	//sine_wave();
-	
+	GPIO_PORTF_DATA_R = 0x02;
 	if(i == 0){
 		sawtooth();
 	}
@@ -544,8 +570,46 @@ void Timer1A_Handler(void){
 	
 	}
 
+	/*
+void twinkle_little_star(void){
+		unsigned int y = 0;
+		//for(y = 0; y < 42; y = y + 1){
+		TIMER1_CTL_R =  0x00000000;
+		while(y < 42){
+			GPIO_PORTF_DATA_R ^= 0xC;
+			Timer1A_TailerLoad(twinkle[y]);
+			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A			
+			SysTick_Wait10ms(25);//quarter second
+			TIMER1_CTL_R =  0x00000000;			
+			
+		}
+		TIMER1_CTL_R =  0x00000000;			
+		
+	}
+*/
+	
+	void GPIOPortF_Handler(void){
+		
+
+	if(GPIO_PORTF_RIS_R&0x01){//if PF0    SW2	
+		GPIO_PORTF_ICR_R = 0x01;
+		////////////////
+		i+= 1;
+		i%=4;
+	}
+	
+	if(GPIO_PORTF_RIS_R&0x10){//if PF4		SW1
+		GPIO_PORTF_ICR_R = 0x10;
+		//////////////////////////
+		//twinkle_little_star();
+		twink = 1;
+	}
+
+}
+	
 
 int main(void){ unsigned long frequency = 142;
+	SysTick_Init();
 	Button_Init();
 	LED_Init();
 	PortB_Init();
@@ -667,11 +731,32 @@ int main(void){ unsigned long frequency = 142;
 		else{
 			d6 = (GPIO_PORTE_DATA_R&0x10)? 0xFF: 0x00;
 		}
-
+		
+		
+		if(twink == 1){
+			y = 0;
+			while(y < 42){
+			GPIO_PORTF_DATA_R ^= 0xC;
+			TIMER1_CTL_R =  0x00000000;			
+			Timer1A_TailerLoad(62500/twinkle[y]);
+			TIMER1_CTL_R = 0x00000001;    // 10) enable TIMER1A			
+			SysTick_Wait10ms(10);//quarter second
+			if(((y%7)==0)&&(y!=0)){
+			SysTick_Wait10ms(25);//quarter second
+			}
+			TIMER1_CTL_R =  0x00000000;	
+			SysTick_Wait10ms(25);//quarter second
+			
+				
+			y +=1;
+		}
+		twink = 0;
 		
 	}
+		
+	
 }
-
+}
 
 
 
